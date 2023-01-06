@@ -379,15 +379,16 @@ class TcpPipe(val tunnelKey: String, packet: Packet) {
             vpnService.protect(remoteSocketChannel.socket())
             remoteSocketChannel.connect(destinationAddress)
         }
-        if (result.isFailure || !result.getOrDefault(false)) {
-            upActive = false
-            downActive = false
-        }
+//        if (result.isFailure ) {
+//            upActive = false
+//            downActive = false
+//        }
         return result
     }
 
 
     companion object {
+        const val TAG = "TcpPipe"
         var tunnelIds = 0
     }
 }
@@ -477,6 +478,7 @@ object TcpWorker : Runnable {
                         }
                         null
                     }.exceptionOrNull()?.let {
+                        Log.d(TAG, "与目标通信发生错误:${tcpPipe?.destinationAddress.toString()}")
                         it.printStackTrace()
                         tcpPipe?.closeRst()
                     }
@@ -625,7 +627,7 @@ object TcpWorker : Runnable {
         }
 
         if (!channel.isConnected) {
-            Log.w(TAG, "连接未就绪")
+//            Log.w(TAG, "连接未就绪")
             val key = tcpPipe.remoteSocketChannelKey
             val ops = key.interestOps() or SelectionKey.OP_WRITE
             key.interestOps(ops)
