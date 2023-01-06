@@ -99,20 +99,23 @@ object ToNetworkQueueWorker : Runnable {
     }
 
     override fun run() {
+        val readBuffer = ByteBuffer.allocate(16384)
         while (!thread.isInterrupted) {
-            val byteBuffer = ByteBuffer.allocate(16384)
             var readCount = 0
             try {
-                readCount = vpnInput.read(byteBuffer)
+                readCount = vpnInput.read(readBuffer)
             } catch (e: IOException) {
                 e.printStackTrace()
                 continue
             }
-
             if (readCount > 0) {
+                readBuffer.flip()
+                val byteArray = ByteArray(readCount)
+                readBuffer.get(byteArray)
+
+                val byteBuffer = ByteBuffer.wrap(byteArray)
                 totalInputCount += readCount
 
-                byteBuffer.flip()
                 val packet = Packet(byteBuffer)
                 if (packet.isUDP) {
                     deviceToNetworkUDPQueue.offer(packet)
@@ -124,6 +127,7 @@ object ToNetworkQueueWorker : Runnable {
             } else if (readCount < 0) {
                 break
             }
+            readBuffer.clear()
         }
         Log.i(TAG, "ToNetworkQueueWorker运行结束")
     }
