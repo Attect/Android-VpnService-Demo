@@ -30,6 +30,7 @@ class MyVpnService : VpnService() {
     override fun onCreate() {
         UdpSendWorker.start(this)
         UdpReceiveWorker.start(this)
+        UdpSocketCleanWorker.start()
         TcpWorker.start(this)
     }
 
@@ -48,6 +49,7 @@ class MyVpnService : VpnService() {
         disconnect()
         UdpSendWorker.stop()
         UdpReceiveWorker.stop()
+        UdpSocketCleanWorker.stop()
         TcpWorker.stop()
     }
 

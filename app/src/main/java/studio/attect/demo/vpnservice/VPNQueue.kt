@@ -40,6 +40,11 @@ val deviceToNetworkTCPQueue = ArrayBlockingQueue<Packet>(1024)
 val networkToDeviceQueue = ArrayBlockingQueue<ByteBuffer>(1024)
 
 /**
+ * TCP转发网络选择器
+ */
+val tcpNioSelector: Selector = Selector.open()
+
+/**
  * UDP转发通道队列
  */
 val udpTunnelQueue = ArrayBlockingQueue<UdpTunnel>(1024)
@@ -50,9 +55,13 @@ val udpTunnelQueue = ArrayBlockingQueue<UdpTunnel>(1024)
 val udpNioSelector: Selector = Selector.open()
 
 /**
- * TCP转发网络选择器
+ * 已存在的udp socket Map<br>
+ * key为目标主机地址:目标端口:请求端口
  */
-val tcpNioSelector: Selector = Selector.open()
+val udpSocketMap = HashMap<String, ManagedDatagramChannel>()
+
+const val UDP_SOCKET_IDLE_TIMEOUT = 60
+
 
 /**
  * 处理设备发往网络的数据包工作线程
@@ -178,7 +187,9 @@ object ToDeviceQueueWorker : Runnable {
 /**
  * UDP转发通道数据
  */
-data class UdpTunnel(val local: InetSocketAddress, val remote: InetSocketAddress, val channel: DatagramChannel)
+data class UdpTunnel(val id: String, val local: InetSocketAddress, val remote: InetSocketAddress, val channel: DatagramChannel)
+
+data class ManagedDatagramChannel(val id: String, val channel: DatagramChannel, var lastTime: Long = System.currentTimeMillis())
 
 /**
  * UDP数据包发送工作线程
@@ -193,12 +204,6 @@ object UdpSendWorker : Runnable {
     private lateinit var thread: Thread
 
     private var vpnService: VpnService? = null
-
-    /**
-     * 已存在的socket Map<br>
-     * key为目标主机地址:目标端口:请求端口
-     */
-    private val socketMap = HashMap<String, DatagramChannel>()
 
     fun start(vpnService: VpnService) {
         this.vpnService = vpnService
@@ -226,7 +231,7 @@ object UdpSendWorker : Runnable {
             val ipAndPort = (destinationAddress.hostAddress?.plus(":") ?: "unknownHostAddress") + destinationPort + ":" + sourcePort
 
             //创建新的socket
-            val outputChannel = if (!socketMap.containsKey(ipAndPort)) {
+            val managedChannel = if (!udpSocketMap.containsKey(ipAndPort)) {
                 val channel = DatagramChannel.open()
                 var channelConnectSuccess = false
                 channel.apply {
@@ -244,28 +249,37 @@ object UdpSendWorker : Runnable {
                 }
 
                 val tunnel = UdpTunnel(
+                    ipAndPort,
                     InetSocketAddress(packet.ip4Header.sourceAddress, udpHeader.sourcePort),
                     InetSocketAddress(packet.ip4Header.destinationAddress, udpHeader.destinationPort),
                     channel
                 )
                 udpTunnelQueue.offer(tunnel)
                 udpNioSelector.wakeup()
-                socketMap[ipAndPort] = channel
-                channel
-            } else {
-                socketMap[ipAndPort] ?: throw IllegalStateException("udp:socketMap[$ipAndPort]不应为null")
-            }
 
+                val managedDatagramChannel = ManagedDatagramChannel(ipAndPort, channel)
+                synchronized(udpSocketMap) {
+                    udpSocketMap[ipAndPort] = managedDatagramChannel
+                }
+                managedDatagramChannel
+            } else {
+                synchronized(udpSocketMap) {
+                    udpSocketMap[ipAndPort] ?: throw IllegalStateException("udp:udpSocketMap[$ipAndPort]不应为null")
+                }
+            }
+            managedChannel.lastTime = System.currentTimeMillis()
             val buffer = packet.backingBuffer
             kotlin.runCatching {
                 while (!thread.isInterrupted && buffer.hasRemaining()) {
-                    val count = outputChannel.write(buffer)
-                    Log.d(TAG, "发送udp数据包 id:${packet.packId} 长度:$count 地址:$ipAndPort")
+                    managedChannel.channel.write(buffer)
                 }
+
             }.exceptionOrNull()?.let {
                 Log.e(TAG, "发送udp数据包发生错误", it)
-                outputChannel.close()
-                socketMap.remove(ipAndPort)
+                managedChannel.channel.close()
+                synchronized(udpSocketMap) {
+                    udpSocketMap.remove(ipAndPort)
+                }
             }
         }
     }
@@ -336,6 +350,7 @@ object UdpReceiveWorker : Runnable {
                 val key = iterator.next()
                 iterator.remove()
                 if (key.isValid && key.isReadable) {
+                    val tunnel = key.attachment() as UdpTunnel
                     kotlin.runCatching {
                         val inputChannel = key.channel() as DatagramChannel
                         receiveBuffer.clear()
@@ -343,10 +358,68 @@ object UdpReceiveWorker : Runnable {
                         receiveBuffer.flip()
                         val data = ByteArray(receiveBuffer.remaining())
                         receiveBuffer.get(data)
-                        sendUdpPacket(key.attachment() as UdpTunnel, inputChannel.socket().localSocketAddress as InetSocketAddress, data) //todo api 21->24
-                    }.exceptionOrNull()?.printStackTrace()
+                        sendUdpPacket(tunnel, inputChannel.socket().localSocketAddress as InetSocketAddress, data) //todo api 21->24
+                    }.exceptionOrNull()?.let {
+                        it.printStackTrace()
+                        synchronized(udpSocketMap) {
+                            udpSocketMap.remove(tunnel.id)
+                        }
+                    }
                 }
             }
+        }
+    }
+
+}
+
+/**
+ * Udp失效socket清理工作线程
+ */
+object UdpSocketCleanWorker : Runnable {
+
+    private const val TAG = "UdpSocketCleanWorker"
+
+    /**
+     * 自身线程
+     */
+    private lateinit var thread: Thread
+
+    /**
+     * 检查间隔，单位：秒
+     */
+    private const val INTERVAL_TIME = 5L
+
+    fun start() {
+        thread = Thread(this).apply {
+            name = TAG
+            start()
+        }
+    }
+
+    fun stop() {
+        thread.interrupt()
+    }
+
+    override fun run() {
+        while (!thread.isInterrupted) {
+            synchronized(udpSocketMap) {
+                val iterator = udpSocketMap.iterator()
+                var removeCount = 0
+                while (!thread.isInterrupted && iterator.hasNext()) {
+                    val managedDatagramChannel = iterator.next()
+                    if (System.currentTimeMillis() - managedDatagramChannel.value.lastTime > UDP_SOCKET_IDLE_TIMEOUT * 1000) {
+                        kotlin.runCatching {
+                            managedDatagramChannel.value.channel.close()
+                        }.exceptionOrNull()?.printStackTrace()
+                        iterator.remove()
+                        removeCount++
+                    }
+                }
+                if (removeCount > 0) {
+                    Log.d(TAG, "移除${removeCount}个超时未活动的UDP，当前有效${udpSocketMap.size}")
+                }
+            }
+            Thread.sleep(INTERVAL_TIME * 1000)
         }
     }
 
