@@ -2,7 +2,6 @@ package studio.attect.demo.vpnservice.protocol;
 
 
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
 
 public class IpUtil {
     public static Packet buildUdpPacket(InetSocketAddress source, InetSocketAddress dest, int ipId) {
@@ -35,12 +34,9 @@ public class IpUtil {
         udpHeader.destinationPort = dest.getPort();
         udpHeader.length = 0;
 
-        ByteBuffer byteBuffer = ByteBuffer.allocate(16384);
-        byteBuffer.flip();
 
         packet.ip4Header = ip4Header;
         packet.udpHeader = udpHeader;
-        packet.backingBuffer = byteBuffer;
         return packet;
     }
 
@@ -82,12 +78,9 @@ public class IpUtil {
         tcpHeader.urgentPointer = 0;
         tcpHeader.window = 65535;
 
-        ByteBuffer byteBuffer = ByteBuffer.allocate(16384);
-        byteBuffer.flip();
 
         packet.ip4Header = ip4Header;
         packet.tcpHeader = tcpHeader;
-        packet.backingBuffer = byteBuffer;
         return packet;
     }
 }

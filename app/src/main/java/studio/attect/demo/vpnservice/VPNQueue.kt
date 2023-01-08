@@ -442,7 +442,7 @@ class TcpPipe(val tunnelKey: String, packet: Packet) {
     val remoteSocketChannelKey: SelectionKey = remoteSocketChannel.register(tcpNioSelector, SelectionKey.OP_CONNECT)
 
     var tcbStatus: TCBStatus = TCBStatus.SYN_SENT
-    val remoteOutBuffer = ByteBuffer.allocate(16384)
+    var remoteOutBuffer: ByteBuffer? = null
 
     var upActive = true
     var downActive = true
@@ -641,9 +641,7 @@ object TcpWorker : Runnable {
         tcpPipe.apply {
             myAcknowledgementNum = tcpHeader.sequenceNumber + payloadSize
             theirAcknowledgementNum = tcpHeader.acknowledgementNumber
-            remoteOutBuffer.clear()
-            remoteOutBuffer.put(packet.backingBuffer)
-            remoteOutBuffer.flip()
+            remoteOutBuffer = packet.backingBuffer
             tryFlushWrite(this)
             sendTcpPack(this, TCPHeader.ACK.toByte())
         }
@@ -697,9 +695,9 @@ object TcpWorker : Runnable {
         val channel: SocketChannel = tcpPipe.remoteSocketChannel
         val buffer = tcpPipe.remoteOutBuffer
 
-        if (tcpPipe.remoteSocketChannel.socket().isOutputShutdown && buffer.remaining() != 0) {
+        if (tcpPipe.remoteSocketChannel.socket().isOutputShutdown && buffer?.remaining() != 0) {
             sendTcpPack(tcpPipe, TCPHeader.FIN.toByte() or TCPHeader.ACK.toByte())
-            buffer.compact()
+            buffer?.compact()
             return false
         }
 
@@ -708,11 +706,11 @@ object TcpWorker : Runnable {
             val key = tcpPipe.remoteSocketChannelKey
             val ops = key.interestOps() or SelectionKey.OP_WRITE
             key.interestOps(ops)
-            buffer.compact()
+            buffer?.compact()
             return false
         }
 
-        while (!thread.isInterrupted && buffer.hasRemaining()) {
+        while (!thread.isInterrupted && buffer?.hasRemaining() == true) {
             val n = kotlin.runCatching {
                 channel.write(buffer)
             }
@@ -725,7 +723,7 @@ object TcpWorker : Runnable {
                 return false
             }
         }
-        buffer.clear()
+        buffer?.clear()
         if (!tcpPipe.upActive) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 tcpPipe.remoteSocketChannel.shutdownOutput()
@@ -775,7 +773,7 @@ object TcpWorker : Runnable {
     private fun TcpPipe.doConnect() {
         val finishConnect = remoteSocketChannel.finishConnect()
         timestamp = System.currentTimeMillis()
-        remoteOutBuffer.flip()
+        remoteOutBuffer?.flip()
         remoteSocketChannelKey.interestOps(SelectionKey.OP_READ or SelectionKey.OP_WRITE)
     }
 
