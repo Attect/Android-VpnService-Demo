@@ -4,9 +4,6 @@ import android.annotation.SuppressLint
 import android.net.VpnService
 import android.os.Build
 import android.util.Log
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import studio.attect.demo.vpnservice.protocol.IpUtil
 import studio.attect.demo.vpnservice.protocol.Packet
 import studio.attect.demo.vpnservice.protocol.Packet.TCPHeader
@@ -82,7 +79,7 @@ object ToNetworkQueueWorker : Runnable {
     /**
      * 总读取数据字节计数
      */
-    var totalInputCount by mutableStateOf(0L)
+    var totalInputCount = 0L
 
 
     fun start(vpnFileDescriptor: FileDescriptor) {
@@ -148,7 +145,7 @@ object ToDeviceQueueWorker : Runnable {
     /**
      * 总写入数据字节计数
      */
-    var totalOutputCount by mutableStateOf(0L)
+    var totalOutputCount = 0L
 
 
     /**
@@ -182,6 +179,8 @@ object ToDeviceQueueWorker : Runnable {
                 }
             }
         } catch (_: InterruptedException) {
+
+        } catch (_: ClosedByInterruptException) {
 
         }
 
@@ -439,7 +438,7 @@ class TcpPipe(val tunnelKey: String, packet: Packet) {
     val sourceAddress: InetSocketAddress = InetSocketAddress(packet.ip4Header.sourceAddress, packet.tcpHeader.sourcePort)
     val destinationAddress: InetSocketAddress = InetSocketAddress(packet.ip4Header.destinationAddress, packet.tcpHeader.destinationPort)
     val remoteSocketChannel: SocketChannel = SocketChannel.open().also { it.configureBlocking(false) }
-    val remoteSocketChannelKey: SelectionKey = remoteSocketChannel.register(tcpNioSelector, SelectionKey.OP_CONNECT)
+    val remoteSocketChannelKey: SelectionKey = remoteSocketChannel.register(tcpNioSelector, SelectionKey.OP_CONNECT).also { it.attach(this) }
 
     var tcbStatus: TCBStatus = TCBStatus.SYN_SENT
     var remoteOutBuffer: ByteBuffer? = null
@@ -541,7 +540,7 @@ object TcpWorker : Runnable {
             while (!thread.isInterrupted && iterator.hasNext()) {
                 val key = iterator.next()
                 iterator.remove()
-                val tcpPipe: TcpPipe? = pipeMap.values.firstOrNull { it.remoteSocketChannel == key.channel() }
+                val tcpPipe: TcpPipe? = key?.attachment() as? TcpPipe
                 if (key.isValid) {
                     kotlin.runCatching {
                         if (key.isAcceptable) {
@@ -552,6 +551,8 @@ object TcpWorker : Runnable {
                             tcpPipe?.doConnect()
                         } else if (key.isWritable) {
                             tcpPipe?.doWrite()
+                        } else {
+                            tcpPipe?.closeRst()
                         }
                         null
                     }.exceptionOrNull()?.let {
@@ -671,7 +672,9 @@ object TcpWorker : Runnable {
             byteBuffer.put(it)
         }
 
-        packet.updateTCPBuffer(byteBuffer, flag, tcpPipe.mySequenceNum, tcpPipe.myAcknowledgementNum, dataSize)
+        packet?.updateTCPBuffer(byteBuffer, flag, tcpPipe.mySequenceNum, tcpPipe.myAcknowledgementNum, dataSize)
+        packet?.release()
+
         byteBuffer.position(TCP_HEADER_SIZE + dataSize)
 
         networkToDeviceQueue.offer(byteBuffer)
@@ -744,7 +747,7 @@ object TcpWorker : Runnable {
     }
 
     private fun TcpPipe.doRead() {
-        val buffer = ByteBuffer.allocate(4 * 1024)
+        val buffer = ByteBuffer.allocate(6666)
         var isQuitType = false
 
         while (!thread.isInterrupted) {
@@ -788,6 +791,7 @@ object TcpWorker : Runnable {
             if (remoteSocketChannel.isOpen) {
                 remoteSocketChannel.close()
             }
+            remoteOutBuffer = null
             pipeMap.remove(tunnelKey)
         }.exceptionOrNull()?.printStackTrace()
     }

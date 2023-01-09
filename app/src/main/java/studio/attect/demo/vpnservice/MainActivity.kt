@@ -15,9 +15,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import studio.attect.demo.vpnservice.ui.theme.AndroidVpnServiceDemoTheme
@@ -25,7 +22,7 @@ import studio.attect.demo.vpnservice.ui.theme.AndroidVpnServiceDemoTheme
 /**
  * 当前处理的AckId
  */
-var currentHandleAckId by mutableStateOf(0L)
+var currentHandleAckId = 0L
 
 
 class MainActivity : ComponentActivity() {
@@ -43,9 +40,9 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Greeting(name = "Vpn服务")
-                        Text(text = "AckId:$currentHandleAckId")
-                        Text(text = "设备->网络 字节:${ToNetworkQueueWorker.totalInputCount}")
-                        Text(text = "网络->设备 字节:${ToDeviceQueueWorker.totalOutputCount}")
+//                        Text(text = "AckId:$currentHandleAckId")
+//                        Text(text = "设备->网络 字节:${ToNetworkQueueWorker.totalInputCount}")
+//                        Text(text = "网络->设备 字节:${ToDeviceQueueWorker.totalOutputCount}")
                         Button(onClick = {
                             if (isMyVpnServiceRunning) {
                                 stopVpn()

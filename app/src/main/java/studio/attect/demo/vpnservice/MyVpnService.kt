@@ -70,6 +70,7 @@ class MyVpnService : VpnService() {
         vpnInterface.close()
         isMyVpnServiceRunning = false
         stopForeground(true)
+        System.gc()
     }
 
 

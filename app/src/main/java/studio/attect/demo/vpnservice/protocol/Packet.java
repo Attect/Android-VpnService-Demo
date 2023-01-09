@@ -42,6 +42,13 @@ public class Packet {
         this.backingBuffer = buffer;
     }
 
+    public void release() {
+        ip4Header = null;
+        tcpHeader = null;
+        udpHeader = null;
+        backingBuffer = null;
+    }
+
     @Override
     public String toString() {
         final StringBuilder sb = new StringBuilder("Packet{");
