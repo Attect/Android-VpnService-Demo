@@ -103,6 +103,11 @@ class MyVpnService : VpnService() {
             .setSession("VPN-Demo")
             .setBlocking(true)
             .setConfigureIntent(mConfigureIntent)
+            .also {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    it.setMetered(false)
+                }
+            }
             .establish() ?: throw IllegalStateException("无法初始化vpnInterface")
     }
 
