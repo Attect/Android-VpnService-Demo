@@ -15,20 +15,41 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.Lifecycle
+import kotlinx.coroutines.*
+import studio.attect.demo.vpnservice.protocol.Packet
 import studio.attect.demo.vpnservice.ui.theme.AndroidVpnServiceDemoTheme
-
-/**
- * 当前处理的AckId
- */
-var currentHandleAckId = 0L
+import kotlin.coroutines.CoroutineContext
 
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), CoroutineScope {
+
+    private val job = Job()
+    override val coroutineContext: CoroutineContext = Dispatchers.Main + job + CoroutineName("MainActivity")
+
     private val vpnContent = registerForActivityResult(VpnContent()) {
         if (it) {
             startVpn()
+        }
+    }
+
+    private var currentHandleAckId by mutableStateOf(0L)
+    private var totalInputCount by mutableStateOf(0L)
+    private var totalOutputCount by mutableStateOf(0L)
+
+    private val dataUpdater = launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+        while (isActive) {
+            if (lifecycle.currentState == Lifecycle.State.RESUMED) {
+                currentHandleAckId = Packet.globalPackId.get()
+                totalInputCount = ToNetworkQueueWorker.totalInputCount
+                totalOutputCount = ToDeviceQueueWorker.totalOutputCount
+            }
+            delay(16L)
         }
     }
 
@@ -40,13 +61,15 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Greeting(name = "Vpn服务")
-//                        Text(text = "AckId:$currentHandleAckId")
-//                        Text(text = "设备->网络 字节:${ToNetworkQueueWorker.totalInputCount}")
-//                        Text(text = "网络->设备 字节:${ToDeviceQueueWorker.totalOutputCount}")
+                        Text(text = "AckId:$currentHandleAckId")
+                        Text(text = "设备->网络 字节:${ToNetworkQueueWorker.totalInputCount}")
+                        Text(text = "网络->设备 字节:${ToDeviceQueueWorker.totalOutputCount}")
                         Button(onClick = {
                             if (isMyVpnServiceRunning) {
                                 stopVpn()
+                                dataUpdater.cancel()
                             } else {
+                                dataUpdater.start()
                                 prepareVpn()
                             }
 
@@ -100,6 +123,11 @@ class MainActivity : ComponentActivity() {
             return resultCode == RESULT_OK
         }
     }
+
+    companion object {
+        const val TAG = "MainActivity"
+    }
+
 
 }
 

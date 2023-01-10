@@ -16,8 +16,7 @@ public class Packet {
     public static final int UDP_HEADER_SIZE = 8;
 
 
-    private static final AtomicLong globalPackId = new AtomicLong();
-    public long packId = globalPackId.addAndGet(1);
+    public static final AtomicLong globalPackId = new AtomicLong();
     public IP4Header ip4Header;
     public TCPHeader tcpHeader;
     public UDPHeader udpHeader;
@@ -27,10 +26,11 @@ public class Packet {
     public boolean isUDP;
 
     public Packet() {
-
+        globalPackId.addAndGet(1);
     }
 
     public Packet(ByteBuffer buffer) throws UnknownHostException {
+        this();
         this.ip4Header = new IP4Header(buffer);
         if (this.ip4Header.protocol == IP4Header.TransportProtocol.TCP) {
             this.tcpHeader = new TCPHeader(buffer);

@@ -22,9 +22,10 @@ Android 5.0(21) 及更高版本
 ## 技术概要
 
 1. Kotlin
-2. jetpack-compose
-3. BIO
-4. NIO
+2. 协程(仅在界面中使用)
+3. jetpack-compose
+4. BIO
+5. NIO
 
 ## 可以用来做什么？
 

@@ -455,10 +455,6 @@ class TcpPipe(val tunnelKey: String, packet: Packet) {
             vpnService.protect(remoteSocketChannel.socket())
             remoteSocketChannel.connect(destinationAddress)
         }
-//        if (result.isFailure ) {
-//            upActive = false
-//            downActive = false
-//        }
         return result
     }
 
@@ -624,8 +620,6 @@ object TcpWorker : Runnable {
         if (tcpPipe.tcbStatus == TCBStatus.SYN_RECEIVED) {
             tcpPipe.tcbStatus = TCBStatus.ESTABLISHED
         }
-
-        currentHandleAckId = packet.packId
 
         val tcpHeader = packet.tcpHeader
         val payloadSize = packet.backingBuffer.remaining()
