@@ -53,6 +53,11 @@ CPU使用：<20%
 
 内存使用：java部分闲时9.6MiB，51MiB/s下载时13~21MiB（相比mightofcode的代码大概降低三分之一以上，且更稳定）
 
+## 缺陷
+
+1. 只支持UDP和TCP(因ICMP包无法处理，微信钱包疑似因此提示无法连接服务器，差点耽误我买包子)
+2. 只支持IPv4，不支持IPV6
+
 ## 参考和引用内容
 
 1. [ToyVpn](https://android.googlesource.com/platform/development/+/master/samples/ToyVpn)
