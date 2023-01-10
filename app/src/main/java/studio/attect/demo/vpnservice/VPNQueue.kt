@@ -3,6 +3,7 @@ package studio.attect.demo.vpnservice
 import android.annotation.SuppressLint
 import android.net.VpnService
 import android.os.Build
+import android.util.Base64
 import android.util.Log
 import studio.attect.demo.vpnservice.protocol.IpUtil
 import studio.attect.demo.vpnservice.protocol.Packet
@@ -552,7 +553,8 @@ object TcpWorker : Runnable {
                         }
                         null
                     }.exceptionOrNull()?.let {
-                        Log.d(TAG, "与目标通信发生错误:${tcpPipe?.destinationAddress.toString()}")
+
+                        Log.d(TAG, "与目标通信发生错误:${Base64.encodeToString(tcpPipe?.destinationAddress.toString().toByteArray(), Base64.DEFAULT)}")
                         it.printStackTrace()
                         tcpPipe?.closeRst()
                     }
@@ -741,7 +743,7 @@ object TcpWorker : Runnable {
     }
 
     private fun TcpPipe.doRead() {
-        val buffer = ByteBuffer.allocate(6666)
+        val buffer = ByteBuffer.allocate(4096)
         var isQuitType = false
 
         while (!thread.isInterrupted) {
