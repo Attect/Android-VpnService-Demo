@@ -101,6 +101,7 @@ class MyVpnService : VpnService() {
             .addRoute("0.0.0.0", 0)
             .addDnsServer("114.114.114.114")
             .setSession("VPN-Demo")
+            .setBlocking(true)
             .setConfigureIntent(mConfigureIntent)
             .establish() ?: throw IllegalStateException("无法初始化vpnInterface")
     }
