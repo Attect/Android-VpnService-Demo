@@ -93,7 +93,9 @@ object ToNetworkQueueWorker : Runnable {
     }
 
     fun stop() {
-        thread.interrupt()
+        if (this::thread.isInitialized) {
+            thread.interrupt()
+        }
     }
 
     override fun run() {
@@ -164,7 +166,9 @@ object ToDeviceQueueWorker : Runnable {
     }
 
     fun stop() {
-        thread.interrupt()
+        if (this::thread.isInitialized) {
+            thread.interrupt()
+        }
     }
 
     override fun run() {
