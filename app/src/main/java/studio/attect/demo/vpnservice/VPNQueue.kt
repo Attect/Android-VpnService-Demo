@@ -223,7 +223,9 @@ object UdpSendWorker : Runnable {
     }
 
     fun stop() {
-        thread.interrupt()
+        if (this::thread.isInitialized) {
+            thread.interrupt()
+        }
         vpnService = null
     }
 
